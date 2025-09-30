@@ -40,10 +40,15 @@ return {
           nvim_lsp = "[LSP]",
           nvim_lua = "[Lua]",
           luasnip = "[LuaSnip]",
-          buffer = "[Buffer]",
           path = "[Path]",
         },
       }),
+    })
+
+    opts.sources = cmp.config.sources({
+      { name = "nvim_lsp", keyword_length = 3 },
+      { name = "nvim_lua", keyword_length = 3 },
+      { name = "luasnip", keyword_length = 3 },
     })
 
     opts.window = {

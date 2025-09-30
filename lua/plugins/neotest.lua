@@ -13,6 +13,12 @@ return {
         skipped = "",
       }
 
+      opts.floating = vim.tbl_deep_extend("force", opts.floating or {}, {
+        border = "rounded", -- "single", "double", "rounded", "solid", "shadow"...
+        max_width = 0.9,
+        max_height = 0.9,
+      })
+
       opts.adapters = {
         require("neotest-python")({
           python = function()

@@ -13,6 +13,10 @@ return {
     picker = {
       enabled = true,
       sources = {
+        projects = {
+          enabled = true,
+          dev = { "~/projects", "~/projects/luizalabs" },
+        },
         explorer = { -- HERE!
           enabled = true,
           hidden = true,

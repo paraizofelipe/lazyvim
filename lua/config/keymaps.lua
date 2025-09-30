@@ -14,3 +14,8 @@ map({ "n" }, "<leader>h", "<cmd>noh<cr>", { desc = "Toggle highligh text" })
 map({ "n" }, "<leader>sc", function()
   Snacks.picker.lsp_workspace_symbols({ filter = LazyVim.config.kind_filter, symbols = { "class" } })
 end, { desc = "LSP Workspace Symbols" })
+
+map({ "n" }, "<leader>ao", function()
+  vim.cmd("vsplit | terminal opencode")
+end, { desc = "Exit terminal mode" })
+map({ "t" }, "<C-q>", "<C-\\><C-n>", { desc = "Exit terminal mode" })
