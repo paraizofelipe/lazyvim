@@ -1,44 +1,44 @@
 return {
   "neovim/nvim-lspconfig",
   opts = function()
-    local keys = require("lazyvim.plugins.lsp.keymaps").get()
+    -- local keys = require("lazyvim.plugins.lsp.keymaps").get()
 
-    keys[#keys + 1] = {
-      "gl",
-      function()
-        vim.diagnostic.open_float(nil, { focus = false, border = "rounded" })
-      end,
-      desc = "Float diagnostic",
-    }
-
-    keys[#keys + 1] = {
-      "<leader>sF",
-      function()
-        Snacks.picker.lsp_workspace_symbols({
-          filter = {
-            default = {
-              "Function",
-              "Method",
-            },
-          },
-        })
-      end,
-      desc = "LSP Finction/Methods",
-    }
-
-    keys[#keys + 1] = {
-      "<leader>sC",
-      function()
-        Snacks.picker.lsp_workspace_symbols({
-          filter = {
-            default = {
-              "Class",
-            },
-          },
-        })
-      end,
-      desc = "LSP Class",
-    }
+    -- keys[#keys + 1] = {
+    --   "gl",
+    --   function()
+    --     vim.diagnostic.open_float(nil, { focus = false, border = "rounded" })
+    --   end,
+    --   desc = "Float diagnostic",
+    -- }
+    --
+    -- keys[#keys + 1] = {
+    --   "<leader>sF",
+    --   function()
+    --     Snacks.picker.lsp_workspace_symbols({
+    --       filter = {
+    --         default = {
+    --           "Function",
+    --           "Method",
+    --         },
+    --       },
+    --     })
+    --   end,
+    --   desc = "LSP Finction/Methods",
+    -- }
+    --
+    -- keys[#keys + 1] = {
+    --   "<leader>sC",
+    --   function()
+    --     Snacks.picker.lsp_workspace_symbols({
+    --       filter = {
+    --         default = {
+    --           "Class",
+    --         },
+    --       },
+    --     })
+    --   end,
+    --   desc = "LSP Class",
+    -- }
 
     local ret = {
       diagnostics = {
@@ -63,6 +63,9 @@ return {
           },
         },
       },
+      folds = {
+        actived = true,
+      },
       inlay_hints = {
         enabled = false,
         exclude = { "vue" }, -- filetypes for which you don't want to enable inlay hints
@@ -83,6 +86,11 @@ return {
         timeout_ms = nil,
       },
       servers = {
+        ["*"] = {
+          keys = {
+            { "gd", "<cmd>lua vim.lsp.buf.definition()<CR>", has = "definition" },
+          },
+        },
         ruff = {
           cmd_env = { RUFF_TRACE = "messages" },
           init_options = {

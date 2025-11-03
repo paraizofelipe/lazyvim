@@ -15,7 +15,9 @@ map({ "n" }, "<leader>sc", function()
   Snacks.picker.lsp_workspace_symbols({ filter = LazyVim.config.kind_filter, symbols = { "class" } })
 end, { desc = "LSP Workspace Symbols" })
 
+-- Claude Code integration
 map({ "n" }, "<leader>ao", function()
-  vim.cmd("vsplit | terminal opencode")
-end, { desc = "Exit terminal mode" })
+  require("custom.plugins.claude").toggle()
+end, { desc = "Toggle Claude Code" })
+
 map({ "t" }, "<C-q>", "<C-\\><C-n>", { desc = "Exit terminal mode" })
