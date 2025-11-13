@@ -15,9 +15,13 @@ map({ "n" }, "<leader>sc", function()
   Snacks.picker.lsp_workspace_symbols({ filter = LazyVim.config.kind_filter, symbols = { "class" } })
 end, { desc = "LSP Workspace Symbols" })
 
--- Claude Code integration
+-- AI integrations
 map({ "n" }, "<leader>ao", function()
-  require("custom.plugins.claude").toggle()
+  require("custom.plugins.claude").toggle_claude()
 end, { desc = "Toggle Claude Code" })
+
+map({ "n" }, "<leader>ac", function()
+  require("custom.plugins.claude").toggle_copilot()
+end, { desc = "Toggle GitHub Copilot" })
 
 map({ "t" }, "<C-q>", "<C-\\><C-n>", { desc = "Exit terminal mode" })
