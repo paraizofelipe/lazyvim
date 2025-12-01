@@ -7,6 +7,79 @@
 -- Or remove existing autocmds by their group name (which is prefixed with `lazyvim_` for the defaults)
 -- e.g. vim.api.nvim_del_augroup_by_name("lazyvim_wrap_spell")
 --
+
+-- Comando para mostrar ferramentas Python detectadas no projeto
+vim.api.nvim_create_user_command("PythonToolsShow", function()
+  local python_tools = require("util.python_tools")
+  local tools = python_tools.get_project_tools()
+
+  if not tools then
+    vim.notify("No Python project detected", vim.log.levels.WARN)
+    return
+  end
+
+  local lines = {
+    "Python Tools Detected:",
+    "",
+    "Formatters:",
+  }
+
+  if #tools.formatters > 0 then
+    for _, formatter in ipairs(tools.formatters) do
+      table.insert(lines, "  - " .. formatter)
+    end
+  else
+    table.insert(lines, "  (none)")
+  end
+
+  table.insert(lines, "")
+  table.insert(lines, "Linters:")
+  if #tools.linters > 0 then
+    for _, linter in ipairs(tools.linters) do
+      table.insert(lines, "  - " .. linter)
+    end
+  else
+    table.insert(lines, "  (none)")
+  end
+
+  table.insert(lines, "")
+  table.insert(lines, "LSP Servers:")
+  if #tools.lsp_servers > 0 then
+    for _, server in ipairs(tools.lsp_servers) do
+      table.insert(lines, "  - " .. server)
+    end
+  else
+    table.insert(lines, "  (none)")
+  end
+
+  -- Mostra em um float
+  local buf = vim.api.nvim_create_buf(false, true)
+  vim.api.nvim_buf_set_lines(buf, 0, -1, false, lines)
+
+  local width = 50
+  local height = #lines + 2
+  local win = vim.api.nvim_open_win(buf, true, {
+    relative = "cursor",
+    width = width,
+    height = height,
+    row = 1,
+    col = 0,
+    style = "minimal",
+    border = "rounded",
+  })
+
+  vim.api.nvim_buf_set_option(buf, "modifiable", false)
+  vim.api.nvim_buf_set_keymap(buf, "n", "q", "<cmd>close<cr>", { noremap = true, silent = true })
+  vim.api.nvim_buf_set_keymap(buf, "n", "<Esc>", "<cmd>close<cr>", { noremap = true, silent = true })
+end, { desc = "Show detected Python tools for current project" })
+
+-- Comando para limpar o cache de detecção de ferramentas
+vim.api.nvim_create_user_command("PythonToolsClearCache", function()
+  local python_tools = require("util.python_tools")
+  python_tools.clear_cache()
+  vim.notify("Python tools cache cleared", vim.log.levels.INFO)
+end, { desc = "Clear Python tools detection cache" })
+
 vim.api.nvim_create_autocmd("ColorScheme", {
   pattern = "*",
   callback = function()

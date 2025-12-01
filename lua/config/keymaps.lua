@@ -5,7 +5,8 @@
 local map = vim.keymap.set
 
 -- commenting
-map({ "n", "v" }, "<leader>/", "<cmd>normal gcc<cr>", { desc = "Add Comment in line" })
+map("n", "<leader>/", "gcc", { desc = "Toggle comment line", remap = true })
+map("v", "<leader>/", "gc", { desc = "Toggle comment selection", remap = true })
 
 map({ "n" }, "<C-y>", "4<C-y>")
 map({ "n" }, "<C-e>", "4<C-e>")
@@ -25,3 +26,6 @@ map({ "n" }, "<leader>ac", function()
 end, { desc = "Toggle GitHub Copilot" })
 
 map({ "t" }, "<C-q>", "<C-\\><C-n>", { desc = "Exit terminal mode" })
+
+-- Python tools
+map({ "n" }, "<leader>cpt", "<cmd>PythonToolsShow<cr>", { desc = "Show detected Python tools" })
