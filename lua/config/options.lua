@@ -8,6 +8,7 @@
 local options = {
   backup = false, -- creates a backup file
   clipboard = "unnamedplus", -- allows neovim to access the system clipboard
+  spelllang = "en,pt_br", -- spell check for English and Brazilian Portuguese
   cmdheight = 1, -- more space in the neovim command line for displaying messages
   completeopt = { "menuone", "noselect" }, -- mostly just for cmp
   conceallevel = 0, -- so that `` is visible in markdown files

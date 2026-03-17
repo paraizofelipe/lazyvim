@@ -95,6 +95,17 @@ vim.api.nvim_create_autocmd("User", {
   end,
 })
 
+-- Initialize translator plugin
+-- Uses Google Gemini API (free tier) - set GEMINI_API_KEY env var
+-- Model: gemini-1.5-flash (15 RPM, 1M tokens/min, 1500 req/day)
+vim.api.nvim_create_autocmd("VimEnter", {
+  callback = function()
+    require("custom.plugins.translator").setup({
+      timeout = 30000,
+    })
+  end,
+})
+
 -- vim.api.nvim_create_autocmd({ "ModeChanged" }, {
 --   callback = function()
 --     local mode = vim.fn.mode()
