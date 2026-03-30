@@ -280,18 +280,57 @@ local function app_status_icon(app)
   return tree_mod.status_icon(sync, health)
 end
 
+local SYNC_ICONS = {
+  Synced = "✓",
+  OutOfSync = "✗",
+  Unknown = "○",
+}
+local HEALTH_ICONS = {
+  Healthy = "✓",
+  Degraded = "✗",
+  Progressing = "●",
+  Suspended = "⏸",
+  Missing = "?",
+  Unknown = "○",
+}
+
 local function render_apps_buf(buf, apps)
   local lines = {}
-  local header = "  Applications (" .. #apps .. ")"
-  table.insert(lines, header)
-  table.insert(lines, "  " .. string.rep("─", 60))
-  table.insert(lines, "")
+
+  -- Compute max name width for dynamic column sizing
+  local max_name = 4 -- min "NAME"
+  for _, app in ipairs(apps) do
+    local name = (app.metadata and app.metadata.name) or "unknown"
+    if #name > max_name then max_name = #name end
+  end
+  max_name = math.min(max_name, 50)
+
+  local col_name    = max_name + 4
+  local col_sync    = 14
+  local col_health  = 14
+  local col_project = 0 -- remainder
+
+  -- Header
+  local hdr = string.format(
+    "  %-" .. col_name .. "s  %-" .. col_sync .. "s  %-" .. col_health .. "s  %s",
+    "NAME", "SYNC", "HEALTH", "PROJECT"
+  )
+  table.insert(lines, hdr)
+  table.insert(lines, "  " .. string.rep("─", #hdr - 2))
 
   for _, app in ipairs(apps) do
-    local name = app.metadata and app.metadata.name or "unknown"
+    local name    = (app.metadata and app.metadata.name) or "unknown"
     local project = (app.spec and app.spec.project) or ""
-    local icon = app_status_icon(app)
-    local line = string.format("  %s  %-30s  %-12s", icon, name, project)
+    local sync_s  = (app.status and app.status.sync and app.status.sync.status) or "Unknown"
+    local health_s = (app.status and app.status.health and app.status.health.status) or "Unknown"
+
+    local sync_icon   = (SYNC_ICONS[sync_s] or "○") .. " " .. sync_s
+    local health_icon = (HEALTH_ICONS[health_s] or "○") .. " " .. health_s
+
+    local line = string.format(
+      "  %-" .. col_name .. "s  %-" .. col_sync .. "s  %-" .. col_health .. "s  %s",
+      name, sync_icon, health_icon, project
+    )
     table.insert(lines, line)
   end
 
@@ -304,12 +343,14 @@ local function render_apps_buf(buf, apps)
 
   for i = 3, #lines do
     local line = lines[i]
-    if line:find("✓") then
+    if line:find("✓") and line:find("✓.*✓") then
       vim.api.nvim_buf_add_highlight(buf, ns, "DiagnosticOk", i - 1, 0, -1)
     elseif line:find("✗") then
       vim.api.nvim_buf_add_highlight(buf, ns, "DiagnosticError", i - 1, 0, -1)
     elseif line:find("●") then
       vim.api.nvim_buf_add_highlight(buf, ns, "DiagnosticWarn", i - 1, 0, -1)
+    elseif line:find("○") then
+      vim.api.nvim_buf_add_highlight(buf, ns, "DiagnosticHint", i - 1, 0, -1)
     end
   end
 end
@@ -349,8 +390,8 @@ function M.open_apps(config, state, host)
     end)
 
     local buf, win = create_float({
-      width = math.floor(vim.o.columns * 0.75),
-      height = math.min(#apps + 3, math.floor(vim.o.lines * 0.7)),
+      width = math.floor(vim.o.columns * 0.85),
+      height = math.min(#apps + 2, math.floor(vim.o.lines * 0.7)),
       title = " ArgoCD: " .. host.name .. " ",
       footer = " [Enter] Resources  [r] Refresh  [d] Diff  [q] Back ",
     })
@@ -365,8 +406,8 @@ function M.open_apps(config, state, host)
       vim.api.nvim_win_close(prev_win, true)
     end
 
-    -- Place cursor on first app line (line 4)
-    vim.api.nvim_win_set_cursor(win, { 4, 0 })
+    -- Place cursor on first app line (line 3: header + separator)
+    vim.api.nvim_win_set_cursor(win, { 3, 0 })
 
     -- Keymaps
     map(buf, "q", function() nav_back(state) end)
@@ -376,8 +417,8 @@ function M.open_apps(config, state, host)
     map(buf, "<CR>", function()
       local cursor = vim.api.nvim_win_get_cursor(win)
       local line_idx = cursor[1]
-      -- Apps start at line 4 (index 4), first 3 lines are header
-      local app_idx = line_idx - 3
+      -- Apps start at line 3 (header + separator), so offset is 2
+      local app_idx = line_idx - 2
       if app_idx >= 1 and app_idx <= #apps then
         local app = apps[app_idx]
         local app_name = app.metadata and app.metadata.name
@@ -395,7 +436,7 @@ function M.open_apps(config, state, host)
     -- d: diff for selected app
     map(buf, "d", function()
       local cursor = vim.api.nvim_win_get_cursor(win)
-      local app_idx = cursor[1] - 3
+      local app_idx = cursor[1] - 2
       if app_idx >= 1 and app_idx <= #apps then
         local app = apps[app_idx]
         local app_name = app.metadata and app.metadata.name
