@@ -190,6 +190,8 @@ function M.logs_cmd(host, cli_opts, app_name, resource_name)
     table.insert(parts, resource_name)
   end
   table.insert(parts, "-f")
+  table.insert(parts, "--tail")
+  table.insert(parts, "100")
   if host.url then
     table.insert(parts, "--server")
     table.insert(parts, host.url)
