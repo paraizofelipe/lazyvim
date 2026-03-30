@@ -150,13 +150,13 @@ end
 function M.open_resources(config, state, host, app_name)
   vim.notify("ArgoCD: Loading resources for " .. app_name .. "...", vim.log.levels.INFO)
 
-  auth.with_auth(host, config.cli, cli.resources, { app_name }, function(ok, stdout, stderr)
+  auth.with_auth(host, config.cli, cli.resources, { app_name }, function(ok, app_json, stderr)
     if not ok then
       vim.notify("ArgoCD: Failed to get resources: " .. stderr, vim.log.levels.ERROR)
       return
     end
 
-    local roots = tree_mod.parse(stdout)
+    local roots = tree_mod.parse(app_json)
     if #roots == 0 then
       vim.notify("ArgoCD: No resources found for " .. app_name, vim.log.levels.WARN)
       return

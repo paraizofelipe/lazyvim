@@ -102,16 +102,27 @@ function M.get_app(host, cli_opts, app_name, callback)
   end)
 end
 
---- List resources of an application (tree output)
+--- Get resources of an application via app get JSON (includes status/health)
 ---@param host table
 ---@param cli_opts table
 ---@param app_name string
----@param callback fun(ok: boolean, stdout: string, stderr: string)
+---@param callback fun(ok: boolean, app: table|nil, stderr: string)
 function M.resources(host, cli_opts, app_name, callback)
   local cmd = base_args(host, cli_opts)
-  vim.list_extend(cmd, { "app", "resources", app_name, "--output", "tree" })
+  vim.list_extend(cmd, { "app", "get", app_name, "-o", "json" })
 
-  M.exec(cmd, callback)
+  M.exec(cmd, function(ok, stdout, stderr)
+    if not ok then
+      callback(false, nil, stderr)
+      return
+    end
+    local parse_ok, app = pcall(vim.json.decode, stdout)
+    if parse_ok and app then
+      callback(true, app, "")
+    else
+      callback(false, nil, "Failed to parse app JSON")
+    end
+  end)
 end
 
 --- Get resource details

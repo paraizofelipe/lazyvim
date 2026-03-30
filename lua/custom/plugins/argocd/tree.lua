@@ -1,87 +1,30 @@
 local M = {}
 
---- Parse the tree output from `argocd app resources --output tree`
---- The output looks like:
----   GROUP  KIND        NAMESPACE  NAME       STATUS  HEALTH   HOOK  MESSAGE
----   ...
----   ├── Deployment  default  my-api  Synced  Healthy
----   │   └── ReplicaSet  default  my-api-abc  Synced  Healthy
----   │       ├── Pod  default  my-api-abc-xyz  Synced  Running
----
----@param raw_output string
----@return table[] flat list of nodes with depth info
-function M.parse(raw_output)
+--- Parse resources from the JSON output of `argocd app get APPNAME -o json`.
+--- Uses app.status.resources which contains group, kind, namespace, name,
+--- status and health for each resource.
+---@param app_json table parsed JSON from argocd app get -o json
+---@return table[] root nodes (flat list — hierarchy shown as flat for reliability)
+function M.parse(app_json)
   local nodes = {}
-  local lines = vim.split(raw_output, "\n", { trimempty = true })
+  local resources = (app_json.status and app_json.status.resources) or {}
 
-  for _, line in ipairs(lines) do
-    -- Skip header lines and empty lines
-    if line:match("^%s*GROUP") or line:match("^%s*$") then
-      goto continue
-    end
-
-    -- Calculate depth by counting tree characters (├── │ └──)
-    -- Each level of nesting uses 4 characters of tree drawing
-    local depth = 0
-    local content = line
-
-    -- Strip ANSI escape codes
-    content = content:gsub("\027%[[%d;]*m", "")
-
-    -- Count depth by tree prefixes
-    local prefix_len = 0
-    local rest = content
-    while true do
-      if rest:match("^│   ") then
-        depth = depth + 1
-        rest = rest:sub(7) -- │ = 3 bytes, + 3 spaces = 6 bytes total, so sub(7)
-        prefix_len = prefix_len + 4
-      elseif rest:match("^├── ") or rest:match("^└── ") then
-        depth = depth + 1
-        rest = rest:sub(11) -- ├/└ = 3 bytes, ─ = 3 bytes, ─ = 3 bytes, space = 1 byte = 10 bytes, so sub(11)
-        prefix_len = prefix_len + 4
-        break
-      elseif rest:match("^    ") then
-        depth = depth + 1
-        rest = rest:sub(5)
-        prefix_len = prefix_len + 4
-      else
-        break
-      end
-    end
-
-    -- Parse the content: KIND NAMESPACE NAME STATUS HEALTH
-    -- The content after tree chars is space-separated fields
-    local fields = {}
-    for field in rest:gmatch("%S+") do
-      table.insert(fields, field)
-    end
-
-    if #fields >= 3 then
-      local node = {
-        group = "",
-        kind = fields[1] or "",
-        namespace = fields[2] or "",
-        name = fields[3] or "",
-        status = fields[4] or "",
-        health = fields[5] or "",
-        depth = depth,
-        children = {},
-        expanded = depth == 0, -- top-level expanded, rest collapsed
-      }
-
-      -- Try to detect group/kind split (e.g., "apps/Deployment")
-      if node.kind:find("/") then
-        node.group, node.kind = node.kind:match("^(.+)/(.+)$")
-      end
-
-      table.insert(nodes, node)
-    end
-
-    ::continue::
+  for _, res in ipairs(resources) do
+    local node = {
+      group = res.group or "",
+      kind = res.kind or "",
+      namespace = res.namespace or "",
+      name = res.name or "",
+      status = res.status or "",
+      health = (res.health and res.health.status) or "",
+      depth = 0,
+      children = {},
+      expanded = true,
+    }
+    table.insert(nodes, node)
   end
 
-  return M.build_tree(nodes)
+  return nodes
 end
 
 --- Build parent-child relationships from flat depth-based list
