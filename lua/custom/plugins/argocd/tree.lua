@@ -34,11 +34,11 @@ function M.parse(raw_output)
     while true do
       if rest:match("^│   ") then
         depth = depth + 1
-        rest = rest:sub(5)
+        rest = rest:sub(7) -- │ = 3 bytes, + 3 spaces = 6 bytes total, so sub(7)
         prefix_len = prefix_len + 4
       elseif rest:match("^├── ") or rest:match("^└── ") then
         depth = depth + 1
-        rest = rest:sub(5) -- UTF-8: these chars are 3 bytes + space
+        rest = rest:sub(11) -- ├/└ = 3 bytes, ─ = 3 bytes, ─ = 3 bytes, space = 1 byte = 10 bytes, so sub(11)
         prefix_len = prefix_len + 4
         break
       elseif rest:match("^    ") then

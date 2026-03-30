@@ -246,6 +246,10 @@ function M.open_resources(config, state, host, app_name)
       if idx <= #tree_lines then
         local node = tree_lines[idx].node
         if tree_mod.can_log(node) then
+          if not Snacks then
+            vim.notify("ArgoCD: Snacks.nvim is required for log viewing", vim.log.levels.ERROR)
+            return
+          end
           local log_cmd = cli.logs_cmd(host, config.cli, app_name, node.name)
           Snacks.terminal.open(log_cmd, {
             win = {
@@ -315,8 +319,21 @@ end
 function M.open_apps(config, state, host)
   vim.notify("ArgoCD: Loading apps from " .. host.name .. "...", vim.log.levels.INFO)
 
+  -- Capture any existing apps window before the async call so we can close it
+  -- only after the new window is successfully created (avoids leaving user with
+  -- nothing if the call fails).
+  local prev_win = nil
+  if #state.nav_stack > 0 and state.nav_stack[#state.nav_stack].type == "apps" then
+    local prev = table.remove(state.nav_stack)
+    prev_win = prev.win
+  end
+
   auth.with_auth(host, config.cli, cli.list_apps, {}, function(ok, apps, stderr)
     if not ok then
+      -- Restore the previous window back onto the stack so the user isn't stranded
+      if prev_win and vim.api.nvim_win_is_valid(prev_win) then
+        table.insert(state.nav_stack, { type = "apps", win = prev_win })
+      end
       vim.notify("ArgoCD: Failed to list apps: " .. stderr, vim.log.levels.ERROR)
       return
     end
@@ -344,6 +361,11 @@ function M.open_apps(config, state, host)
     state.active_host = host
     nav_push(state, { type = "apps", win = win, buf = buf, data = { host = host, apps = apps } })
 
+    -- Close the previous apps window now that the new one is safely pushed
+    if prev_win and vim.api.nvim_win_is_valid(prev_win) then
+      vim.api.nvim_win_close(prev_win, true)
+    end
+
     -- Place cursor on first app line (line 4)
     vim.api.nvim_win_set_cursor(win, { 4, 0 })
 
@@ -366,9 +388,8 @@ function M.open_apps(config, state, host)
       end
     end)
 
-    -- r: refresh
+    -- r: refresh (open_apps handles removing the old window safely after new one is created)
     map(buf, "r", function()
-      nav_pop(state)
       M.open_apps(config, state, host)
     end)
 

@@ -48,6 +48,12 @@ function M.with_auth(host, cli_opts, cli_fn, args, callback)
       vim.notify("ArgoCD: Session expired, opening SSO login...", vim.log.levels.INFO)
       local login_cmd = cli.login_cmd(host, cli_opts)
 
+      if not Snacks then
+        vim.notify("ArgoCD: Snacks.nvim is required for SSO login", vim.log.levels.ERROR)
+        callback(false, nil, "Snacks.nvim not available")
+        return
+      end
+
       Snacks.terminal.open(login_cmd, {
         win = {
           position = "float",
