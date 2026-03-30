@@ -8,7 +8,7 @@ local ns = vim.api.nvim_create_namespace("argocd")
 
 -- ─── Buffer Helpers ───────────────────────────────────────────
 
----@param opts { width: number|nil, height: number|nil, title: string, title_pos: string|nil }
+---@param opts { width: number|nil, height: number|nil, title: string, title_pos: string|nil, footer: string|nil, footer_pos: string|nil }
 ---@return number buf, number win
 local function create_float(opts)
   local buf = vim.api.nvim_create_buf(false, true)
@@ -33,6 +33,8 @@ local function create_float(opts)
     border = "rounded",
     title = opts.title or "",
     title_pos = opts.title_pos or "center",
+    footer = opts.footer or "",
+    footer_pos = opts.footer_pos or "center",
   })
 
   vim.wo[win].wrap = false
@@ -168,6 +170,7 @@ function M.open_resources(config, state, host, app_name)
       width = math.floor(vim.o.columns * 0.8),
       height = math.floor(vim.o.lines * 0.7),
       title = " " .. app_name .. ": Resources ",
+      footer = " [Enter] Expand  [i] Info  [m] Manifest  [d] Diff  [l] Logs  [q] Back ",
     })
 
     render_tree_buf(buf, tree_lines)
@@ -292,19 +295,14 @@ local function render_apps_buf(buf, apps)
     table.insert(lines, line)
   end
 
-  table.insert(lines, "")
-  table.insert(lines, "  [Enter] Resources  [r] Refresh  [d] Diff  [q] Back")
-
   set_lines(buf, lines)
 
   -- Highlights
   vim.api.nvim_buf_clear_namespace(buf, ns, 0, -1)
   vim.api.nvim_buf_add_highlight(buf, ns, "Title", 0, 0, -1)
   vim.api.nvim_buf_add_highlight(buf, ns, "Comment", 1, 0, -1)
-  local footer_idx = #lines - 1
-  vim.api.nvim_buf_add_highlight(buf, ns, "Comment", footer_idx, 0, -1)
 
-  for i = 3, #lines - 2 do
+  for i = 3, #lines do
     local line = lines[i]
     if line:find("✓") then
       vim.api.nvim_buf_add_highlight(buf, ns, "DiagnosticOk", i - 1, 0, -1)
@@ -352,8 +350,9 @@ function M.open_apps(config, state, host)
 
     local buf, win = create_float({
       width = math.floor(vim.o.columns * 0.75),
-      height = math.min(#apps + 6, math.floor(vim.o.lines * 0.7)),
+      height = math.min(#apps + 3, math.floor(vim.o.lines * 0.7)),
       title = " ArgoCD: " .. host.name .. " ",
+      footer = " [Enter] Resources  [r] Refresh  [d] Diff  [q] Back ",
     })
 
     render_apps_buf(buf, apps)
@@ -437,9 +436,6 @@ function M.open_hosts(config, state)
     table.insert(lines, line)
   end
 
-  table.insert(lines, "")
-  table.insert(lines, "  [Enter] Select  [q] Close")
-
   local max_width = 0
   for _, line in ipairs(lines) do
     max_width = math.max(max_width, #line)
@@ -449,6 +445,7 @@ function M.open_hosts(config, state)
     width = math.max(max_width + 4, 55),
     height = #lines + 1,
     title = " ArgoCD ",
+    footer = " [Enter] Select  [q] Close ",
   })
 
   set_lines(buf, lines)
@@ -457,7 +454,6 @@ function M.open_hosts(config, state)
   vim.api.nvim_buf_clear_namespace(buf, ns, 0, -1)
   vim.api.nvim_buf_add_highlight(buf, ns, "Title", 0, 0, -1)
   vim.api.nvim_buf_add_highlight(buf, ns, "Comment", 1, 0, -1)
-  vim.api.nvim_buf_add_highlight(buf, ns, "Comment", #lines - 1, 0, -1)
 
   nav_push(state, { type = "hosts", win = win, buf = buf })
 
