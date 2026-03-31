@@ -3,7 +3,8 @@ return {
   dependencies = { "folke/snacks.nvim" },
   opts = {
     hosts = {
-      -- { name = "prod", url = "https://argocd.prod.example.com" },
+      { name = "hml-api", url = "argocd-mke-sellers-hml.ipet.sh" },
+      { name = "hml-workers", url = "argocd-mgc-navegacao-workers.ipet.sh" },
     },
     cli = {
       grpc_web = false,
