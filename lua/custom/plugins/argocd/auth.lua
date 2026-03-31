@@ -30,7 +30,7 @@ end
 ---@param cli_fn fun(...) the cli module function to call
 ---@param args table additional args to pass between cli_opts and callback
 ---@param callback fun(ok: boolean, ...) final callback
-function M.with_auth(host, cli_opts, cli_fn, args, callback)
+function M.with_auth(host, cli_opts, cli_fn, args, callback, _retried)
   -- Build the actual call args: host, cli_opts, ...args, callback
   local call_args = { host, cli_opts }
   for _, arg in ipairs(args) do
@@ -45,6 +45,11 @@ function M.with_auth(host, cli_opts, cli_fn, args, callback)
     end
 
     if is_auth_error(stderr or "") then
+      if _retried then
+        callback(false, nil, "Authentication failed after SSO login: " .. (stderr or ""))
+        return
+      end
+
       vim.notify("ArgoCD: Session expired, opening SSO login...", vim.log.levels.INFO)
       local login_cmd = cli.login_cmd(host, cli_opts)
 
@@ -66,13 +71,7 @@ function M.with_auth(host, cli_opts, cli_fn, args, callback)
         on_close = function()
           vim.schedule(function()
             vim.notify("ArgoCD: SSO login completed, retrying...", vim.log.levels.INFO)
-            -- Retry the original command
-            local retry_args = { host, cli_opts }
-            for _, arg in ipairs(args) do
-              table.insert(retry_args, arg)
-            end
-            table.insert(retry_args, callback)
-            cli_fn(unpack(retry_args))
+            M.with_auth(host, cli_opts, cli_fn, args, callback, true)
           end)
         end,
       })

@@ -178,8 +178,12 @@ function M.open_resources(config, state, host, app_name)
     nav_push(state, { type = "resources", win = win, buf = buf, data = { app_name = app_name, roots = roots } })
 
     -- Keymaps
-    map(buf, "q", function() nav_back(state) end)
-    map(buf, "<Esc>", function() nav_back(state) end)
+    map(buf, "q", function()
+      nav_back(state)
+    end)
+    map(buf, "<Esc>", function()
+      nav_back(state)
+    end)
 
     -- Enter: toggle expand/collapse
     map(buf, "<CR>", function()
@@ -301,35 +305,41 @@ local function render_apps_buf(buf, apps)
   local max_name = 4 -- min "NAME"
   for _, app in ipairs(apps) do
     local name = (app.metadata and app.metadata.name) or "unknown"
-    if #name > max_name then max_name = #name end
+    if #name > max_name then
+      max_name = #name
+    end
   end
   max_name = math.min(max_name, 50)
 
-  local col_name    = max_name + 4
-  local col_sync    = 14
-  local col_health  = 14
-  local col_project = 0 -- remainder
-
+  local col_name = max_name + 4
+  local col_sync = 14
+  local col_health = 14
   -- Header
   local hdr = string.format(
     "  %-" .. col_name .. "s  %-" .. col_sync .. "s  %-" .. col_health .. "s  %s",
-    "NAME", "SYNC", "HEALTH", "PROJECT"
+    "NAME",
+    "SYNC",
+    "HEALTH",
+    "PROJECT"
   )
   table.insert(lines, hdr)
   table.insert(lines, "  " .. string.rep("─", #hdr - 2))
 
   for _, app in ipairs(apps) do
-    local name    = (app.metadata and app.metadata.name) or "unknown"
+    local name = (app.metadata and app.metadata.name) or "unknown"
     local project = (app.spec and app.spec.project) or ""
-    local sync_s  = (app.status and app.status.sync and app.status.sync.status) or "Unknown"
+    local sync_s = (app.status and app.status.sync and app.status.sync.status) or "Unknown"
     local health_s = (app.status and app.status.health and app.status.health.status) or "Unknown"
 
-    local sync_icon   = (SYNC_ICONS[sync_s] or "○") .. " " .. sync_s
+    local sync_icon = (SYNC_ICONS[sync_s] or "○") .. " " .. sync_s
     local health_icon = (HEALTH_ICONS[health_s] or "○") .. " " .. health_s
 
     local line = string.format(
       "  %-" .. col_name .. "s  %-" .. col_sync .. "s  %-" .. col_health .. "s  %s",
-      name, sync_icon, health_icon, project
+      name,
+      sync_icon,
+      health_icon,
+      project
     )
     table.insert(lines, line)
   end
@@ -410,8 +420,12 @@ function M.open_apps(config, state, host)
     vim.api.nvim_win_set_cursor(win, { 3, 0 })
 
     -- Keymaps
-    map(buf, "q", function() nav_back(state) end)
-    map(buf, "<Esc>", function() nav_back(state) end)
+    map(buf, "q", function()
+      nav_back(state)
+    end)
+    map(buf, "<Esc>", function()
+      nav_back(state)
+    end)
 
     -- Enter: open resources for selected app
     map(buf, "<CR>", function()

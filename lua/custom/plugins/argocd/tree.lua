@@ -27,35 +27,6 @@ function M.parse(app_json)
   return nodes
 end
 
---- Build parent-child relationships from flat depth-based list
----@param flat_nodes table[]
----@return table[] root nodes with nested children
-function M.build_tree(flat_nodes)
-  if #flat_nodes == 0 then
-    return {}
-  end
-
-  local roots = {}
-  local stack = {} -- stack of { node, depth }
-
-  for _, node in ipairs(flat_nodes) do
-    -- Pop stack until we find parent (depth < current)
-    while #stack > 0 and stack[#stack].depth >= node.depth do
-      table.remove(stack)
-    end
-
-    if #stack == 0 then
-      table.insert(roots, node)
-    else
-      table.insert(stack[#stack].node.children, node)
-    end
-
-    table.insert(stack, { node = node, depth = node.depth })
-  end
-
-  return roots
-end
-
 --- Render the tree into display lines
 ---@param roots table[] root nodes
 ---@return table[] lines: { text: string, node: table, depth: number }
@@ -75,10 +46,7 @@ function M.render(roots)
       end
 
       local status_icon = M.status_icon(node.status, node.health)
-      local text = string.format(
-        "%s%s %s/%s  %s",
-        indent, icon, node.kind, node.name, status_icon
-      )
+      local text = string.format("%s%s %s/%s  %s", indent, icon, node.kind, node.name, status_icon)
 
       table.insert(lines, {
         text = text,
