@@ -80,7 +80,7 @@ function M.with_auth(host, cli_opts, cli_fn, args, callback, _retried)
     end
   end)
 
-  cli_fn(table.unpack(call_args))
+  cli_fn(unpack(call_args))
 end
 
 return M
