@@ -36,8 +36,10 @@ return {
           end,
         },
 
-        -- Configuração do black
         black = {
+          args = function(_, ctx)
+            return { "--quiet", "--stdin-filename", ctx.filename, "-" }
+          end,
           condition = function(_, ctx)
             return python_tools.should_use_formatter("black", ctx.buf)
           end,
@@ -45,6 +47,9 @@ return {
 
         -- Configuração do blue
         blue = {
+          args = function(_, ctx)
+            return { "--quiet", "--stdin-filename", ctx.filename, "-" }
+          end,
           condition = function(_, ctx)
             return python_tools.should_use_formatter("blue", ctx.buf)
           end,
@@ -64,10 +69,19 @@ return {
           end,
         },
 
-        -- Configuração do isort
         isort = {
+          command = function()
+            return python_tools.get_active_venv_python() or vim.fn.exepath("python") or "python"
+          end,
+          args = function(_, ctx)
+            return { "-m", "isort", "--quiet", "--filename", ctx.filename, "-" }
+          end,
+          stdin = true,
           condition = function(_, ctx)
-            return python_tools.should_use_formatter("isort", ctx.buf)
+            if not python_tools.should_use_formatter("isort", ctx.buf) then
+              return false
+            end
+            return python_tools.get_active_venv_python() ~= nil
           end,
         },
 

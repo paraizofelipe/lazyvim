@@ -125,26 +125,6 @@ function M.resources(host, cli_opts, app_name, callback)
   end)
 end
 
---- Get resource details
----@param host table
----@param cli_opts table
----@param app_name string
----@param resource table { kind: string, name: string, namespace: string }
----@param callback fun(ok: boolean, stdout: string, stderr: string)
-function M.get_resource(host, cli_opts, app_name, resource, callback)
-  local cmd = base_args(host, cli_opts)
-  vim.list_extend(cmd, {
-    "app", "get-resource", app_name,
-    "--resource-name", resource.name,
-    "--kind", resource.kind,
-  })
-  if resource.namespace and resource.namespace ~= "" then
-    vim.list_extend(cmd, { "--namespace", resource.namespace })
-  end
-
-  M.exec(cmd, callback)
-end
-
 --- Get manifests
 ---@param host table
 ---@param cli_opts table
@@ -203,6 +183,23 @@ function M.logs_cmd(host, cli_opts, app_name, resource_name)
     table.insert(parts, "--insecure")
   end
   return table.concat(parts, " ")
+end
+
+--- Get logs snapshot (non-follow) for a resource/app
+---@param host table
+---@param cli_opts table
+---@param app_name string
+---@param resource_name string|nil
+---@param callback fun(ok: boolean, stdout: string, stderr: string)
+function M.logs(host, cli_opts, app_name, resource_name, callback)
+  local cmd = base_args(host, cli_opts)
+  vim.list_extend(cmd, { "app", "logs", app_name })
+  if resource_name and resource_name ~= "" then
+    vim.list_extend(cmd, { "--name", resource_name })
+  end
+  vim.list_extend(cmd, { "--tail", "200" })
+
+  M.exec(cmd, callback)
 end
 
 --- Build the login command string for SSO (used by Snacks terminal)

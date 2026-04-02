@@ -3,7 +3,7 @@ local M = {}
 M.config = {}
 M.state = {
   active_host = nil, -- currently selected host config
-  nav_stack = {},    -- stack of { type, win, buf, data }
+  nav_stack = {},    -- stack of { type, data, render }
 }
 
 function M.setup(opts)
@@ -12,6 +12,13 @@ function M.setup(opts)
     cli = {
       grpc_web = false,
       insecure = false,
+    },
+    window = {
+      width = 0.85,
+      height = 0.70,
+    },
+    cache = {
+      ttl = 300, -- segundos (5 minutos)
     },
   }, opts or {})
 end

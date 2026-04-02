@@ -1,5 +1,14 @@
 return {
   "harrisoncramer/gitlab.nvim",
+  keys = {
+    {
+      "<leader>gr",
+      function()
+        require("gitlab").choose_merge_request()
+      end,
+      desc = "Selecionar SIMPLE_SETTINGS",
+    },
+  },
   dependencies = {
     "MunifTanjim/nui.nvim",
     "nvim-lua/plenary.nvim",

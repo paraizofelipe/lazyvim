@@ -8,6 +8,20 @@ return {
       end,
       desc = "Selecionar SIMPLE_SETTINGS",
     },
+    {
+      "<leader>ms",
+      function()
+        require("custom.plugins.makefile").pick_target()
+      end,
+      desc = "Make targets",
+    },
+    {
+      "<leader>mt",
+      function()
+        require("custom.plugins.makefile").toggle()
+      end,
+      desc = "Toggle make terminal",
+    },
   },
   opts = {
     picker = {

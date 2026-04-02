@@ -5,9 +5,12 @@ return {
     hosts = {
       { name = "hml-api", url = "argocd-mke-sellers-hml.ipet.sh" },
       { name = "hml-workers", url = "argocd-mgc-navegacao-workers.ipet.sh" },
+      { name = "prod-api", url = "argocd-mgc-navegacao-apis-v2.ipet.sh" },
+      { name = "prod-workers", url = "argocd-mgc-navegacao-workers.ipet.sh" },
+      { name = "prod-elastic", url = "argocd-mgc-catalogo-prd.ipet.sh" },
     },
     cli = {
-      grpc_web = false,
+      grpc_web = true,
       insecure = false,
     },
   },
