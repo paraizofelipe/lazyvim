@@ -1,4 +1,23 @@
 local M = {}
+local token_mod = require("custom.plugins.argocd.token")
+
+local function shell_escape_single(value)
+  return "'" .. tostring(value):gsub("'", "'\\''") .. "'"
+end
+
+local function encode_query_component(value)
+  return tostring(value):gsub("[^%w%-%._~]", function(c)
+    return string.format("%%%02X", string.byte(c))
+  end)
+end
+
+local function build_resource_tree_url(host, app_name, app_namespace)
+  local scheme = host.url:match("^https?://") and "" or "https://"
+  local base = scheme .. host.url
+  local app = encode_query_component(app_name)
+  local namespace = encode_query_component((app_namespace and app_namespace ~= "") and app_namespace or "argocd")
+  return string.format("%s/api/v1/applications/%s/resource-tree?appNamespace=%s", base, app, namespace)
+end
 
 --- Build base command args with global flags
 ---@param host table { name: string, url: string }
@@ -125,6 +144,70 @@ function M.resources(host, cli_opts, app_name, callback)
   end)
 end
 
+function M.resource_tree(host, cli_opts, app_name, app_namespace, callback)
+  local token = token_mod.get_raw_token(host)
+  if not token then
+    callback(false, nil, "Token SSO não encontrado para host selecionado")
+    return
+  end
+
+  local url = build_resource_tree_url(host, app_name, app_namespace)
+  local cmd = {
+    "sh",
+    "-c",
+    "curl -sS --connect-timeout 10 --max-time 30 "
+      .. (cli_opts.insecure and "-k " or "")
+      .. "-H " .. shell_escape_single("Authorization: Bearer " .. token) .. " "
+      .. "-H " .. shell_escape_single("Accept: application/json") .. " "
+      .. "-w " .. shell_escape_single("\\nhttp_status:%{http_code}") .. " "
+      .. shell_escape_single(url),
+  }
+
+  M.exec(cmd, function(ok, stdout, stderr)
+    if not ok then
+      callback(false, nil, (stderr ~= "" and stderr) or "http_status:000 request_failed")
+      return
+    end
+
+    local body, status = stdout:match("^([%s%S]*)\\n(http_status:%d%d%d)%s*$")
+    if not status then
+      callback(false, nil, "http_status:000 malformed_curl_output")
+      return
+    end
+    if status ~= "http_status:200" then
+      callback(false, nil, status)
+      return
+    end
+
+    local parse_ok, payload = pcall(vim.json.decode, body)
+    if not parse_ok or type(payload) ~= "table" then
+      callback(false, nil, "http_status:200 json_decode_failed")
+      return
+    end
+
+    callback(true, payload, "")
+  end)
+end
+
+--- Get resource details
+---@param host table
+---@param cli_opts table
+---@param app_name string
+---@param resource table { kind: string, name: string, namespace: string }
+---@param callback fun(ok: boolean, stdout: string, stderr: string)
+function M.get_resource(host, cli_opts, app_name, resource, callback)
+  local cmd = base_args(host, cli_opts)
+  vim.list_extend(cmd, {
+    "app", "get-resource", app_name,
+    "--resource-name", resource.name,
+    "--kind", resource.kind,
+  })
+  if resource.namespace and resource.namespace ~= "" then
+    vim.list_extend(cmd, { "--namespace", resource.namespace })
+  end
+
+  M.exec(cmd, callback)
+end
 --- Get manifests
 ---@param host table
 ---@param cli_opts table

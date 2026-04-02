@@ -1,16 +1,46 @@
 local M = {}
 
---- Parse resources from the JSON output of `argocd app get APPNAME -o json`.
---- Uses app.status.resources which contains group, kind, namespace, name,
---- status and health for each resource.
----@param app_json table parsed JSON from argocd app get -o json
----@return table[] root nodes (flat list — hierarchy shown as flat for reliability)
-function M.parse(app_json)
+local KIND_PRIORITY = {
+  Deployment = 1,
+  ReplicaSet = 2,
+  Pod = 3,
+}
+
+local function kind_rank(kind)
+  return KIND_PRIORITY[kind] or 999
+end
+
+local function sort_tree(nodes)
+  table.sort(nodes, function(a, b)
+    local ra, rb = kind_rank(a.kind), kind_rank(b.kind)
+    if ra ~= rb then
+      return ra < rb
+    end
+    return (a.name or "") < (b.name or "")
+  end)
+
+  for _, node in ipairs(nodes) do
+    if #node.children > 0 then
+      sort_tree(node.children)
+    end
+  end
+end
+
+local function node_key(ref)
+  return table.concat({
+    ref.group or "",
+    ref.kind or "",
+    ref.namespace or "",
+    ref.name or "",
+  }, ":")
+end
+
+local function parse_legacy_resources(app_json)
   local nodes = {}
   local resources = (app_json.status and app_json.status.resources) or {}
 
   for _, res in ipairs(resources) do
-    local node = {
+    table.insert(nodes, {
       group = res.group or "",
       kind = res.kind or "",
       namespace = res.namespace or "",
@@ -20,11 +50,98 @@ function M.parse(app_json)
       depth = 0,
       children = {},
       expanded = true,
-    }
-    table.insert(nodes, node)
+    })
   end
 
+  sort_tree(nodes)
   return nodes
+end
+
+local function first_parent_key(parent_refs)
+  local first = parent_refs and parent_refs[1] or nil
+  if type(first) == "string" then
+    return first
+  end
+  if type(first) == "table" then
+    return node_key(first)
+  end
+  return nil
+end
+
+local function assign_depth_and_expand(node, depth)
+  node.depth = depth
+  node.expanded = (depth == 0)
+  for _, child in ipairs(node.children) do
+    assign_depth_and_expand(child, depth + 1)
+  end
+end
+
+local function parse_resource_tree_payload(payload)
+  local nodes = {}
+  for _, item in ipairs(payload.nodes or {}) do
+    table.insert(nodes, item)
+  end
+  for _, item in ipairs(payload.orphanedNodes or {}) do
+    table.insert(nodes, item)
+  end
+  local by_key = {}
+
+  for _, item in ipairs(nodes) do
+    local key = node_key(item)
+    by_key[key] = {
+      uid = item.uid,
+      key = key,
+      group = item.group or "",
+      kind = item.kind or "",
+      namespace = item.namespace or "",
+      name = item.name or "",
+      status = item.status or item.syncStatus or "",
+      health = (item.health and item.health.status) or item.healthStatus or "",
+      parentRefs = item.parentRefs or {},
+      children = {},
+      expanded = false,
+      depth = 0,
+    }
+  end
+
+  local roots = {}
+  for _, node in pairs(by_key) do
+    local parent_key = first_parent_key(node.parentRefs)
+    local parent = parent_key and by_key[parent_key] or nil
+    if parent then
+      table.insert(parent.children, node)
+    else
+      table.insert(roots, node)
+    end
+  end
+
+  for _, root in ipairs(roots) do
+    assign_depth_and_expand(root, 0)
+  end
+
+  sort_tree(roots)
+  return roots
+end
+
+--- Parse resources from the JSON output of `argocd app get APPNAME -o json`.
+--- Uses app.status.resources which contains group, kind, namespace, name,
+--- status and health for each resource.
+---@param app_json table parsed JSON from argocd app get -o json
+---@return table[] root nodes (flat list — hierarchy shown as flat for reliability)
+function M.parse(app_json)
+  if type(app_json) ~= "table" then
+    return {}
+  end
+
+  if app_json.status and app_json.status.resources then
+    return parse_legacy_resources(app_json)
+  end
+
+  if app_json.nodes then
+    return parse_resource_tree_payload(app_json)
+  end
+
+  return {}
 end
 
 --- Render the tree into display lines
