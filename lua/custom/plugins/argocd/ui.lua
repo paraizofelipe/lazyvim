@@ -149,16 +149,21 @@ local function render_tree_buf(buf, tree_lines)
   end
 end
 
-function M.open_resources(config, state, host, app_name)
+function M.open_resources(config, state, host, app_name, app_namespace)
   vim.notify("ArgoCD: Loading resources for " .. app_name .. "...", vim.log.levels.INFO)
 
-  auth.with_auth(host, config.cli, cli.resources, { app_name }, function(ok, app_json, stderr)
+  if not app_namespace or app_namespace == "" then
+    app_namespace = "argocd"
+    vim.notify("ArgoCD: namespace da Application ausente; usando appNamespace=argocd", vim.log.levels.WARN)
+  end
+
+  auth.with_auth(host, config.cli, cli.resource_tree, { app_name, app_namespace }, function(ok, payload, stderr)
     if not ok then
       vim.notify("ArgoCD: Failed to get resources: " .. stderr, vim.log.levels.ERROR)
       return
     end
 
-    local roots = tree_mod.parse(app_json)
+    local roots = tree_mod.parse(payload)
     if #roots == 0 then
       vim.notify("ArgoCD: No resources found for " .. app_name, vim.log.levels.WARN)
       return
@@ -437,7 +442,8 @@ function M.open_apps(config, state, host)
         local app = apps[app_idx]
         local app_name = app.metadata and app.metadata.name
         if app_name then
-          M.open_resources(config, state, host, app_name)
+          local app_namespace = (app.metadata and app.metadata.namespace) or "argocd"
+          M.open_resources(config, state, host, app_name, app_namespace)
         end
       end
     end)

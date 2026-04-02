@@ -8,6 +8,7 @@ local AUTH_ERROR_PATTERNS = {
   "Unauthenticated",
   "not logged in",
   "invalid session",
+  "http_status:401",
 }
 
 --- Check if stderr indicates an authentication error
