@@ -169,11 +169,17 @@ function M.resource_tree(host, cli_opts, app_name, app_namespace, callback)
       return
     end
 
-    local body, status = stdout:match("^([%s%S]*)\\n(http_status:%d%d%d)%s*$")
+    local status = stdout:match("http_status:%d%d%d%s*$")
     if not status then
       callback(false, nil, "http_status:000 malformed_curl_output")
       return
     end
+
+    local body, removed = stdout:gsub("\nhttp_status:%d%d%d%s*$", "")
+    if removed == 0 then
+      body = stdout:gsub("http_status:%d%d%d%s*$", "")
+    end
+
     if status ~= "http_status:200" then
       callback(false, nil, status)
       return

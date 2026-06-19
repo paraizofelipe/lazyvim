@@ -149,7 +149,7 @@ return {
         go = { "goimports", "golines" },
         json = { "jq" },
         yaml = { "yamlfmt" },
-        markdown = { "markdown-toc", "markdownlint-cli2" },
+        -- markdown = { "markdown-toc", "markdownlint-cli2" },
       })
 
       return opts

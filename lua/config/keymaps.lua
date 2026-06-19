@@ -44,6 +44,8 @@ map(
 -- Kanban
 local kanban_buf = nil
 local kanban_win = nil
+local goargo_buf = nil
+local goargo_win = nil
 
 map({ "n" }, "<leader>kb", function()
   if kanban_win and vim.api.nvim_win_is_valid(kanban_win) then
@@ -95,6 +97,57 @@ map({ "n" }, "<leader>kb", function()
 
   vim.cmd("startinsert")
 end, { desc = "Toggle Kanban" })
+
+map({ "n" }, "<leader>A", function()
+  if goargo_win and vim.api.nvim_win_is_valid(goargo_win) then
+    vim.api.nvim_win_close(goargo_win, true)
+    goargo_win = nil
+    return
+  end
+
+  local width = math.floor(vim.o.columns * 0.8)
+  local height = math.floor(vim.o.lines * 0.8)
+  local row = math.floor((vim.o.lines - height) / 2)
+  local col = math.floor((vim.o.columns - width) / 2)
+
+  if not goargo_buf or not vim.api.nvim_buf_is_valid(goargo_buf) then
+    goargo_buf = vim.api.nvim_create_buf(false, true)
+    vim.bo[goargo_buf].bufhidden = "hide"
+  end
+
+  goargo_win = vim.api.nvim_open_win(goargo_buf, true, {
+    relative = "editor",
+    width = width,
+    height = height,
+    row = row,
+    col = col,
+    style = "minimal",
+    border = "rounded",
+    title = " GoArgo ",
+    title_pos = "center",
+  })
+
+  local buf_lines = vim.api.nvim_buf_get_lines(goargo_buf, 0, -1, false)
+  if #buf_lines == 1 and buf_lines[1] == "" then
+    vim.fn.termopen("goargo", {
+      cwd = vim.fn.getcwd(),
+      on_exit = function()
+        vim.schedule(function()
+          if goargo_win and vim.api.nvim_win_is_valid(goargo_win) then
+            vim.api.nvim_win_close(goargo_win, true)
+            goargo_win = nil
+          end
+          if goargo_buf and vim.api.nvim_buf_is_valid(goargo_buf) then
+            vim.api.nvim_buf_delete(goargo_buf, { force = true })
+            goargo_buf = nil
+          end
+        end)
+      end,
+    })
+  end
+
+  vim.cmd("startinsert")
+end, { desc = "Toggle GoArgo" })
 
 -- GitLab CI
 map({ "n" }, "<leader>gc", function()
