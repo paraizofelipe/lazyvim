@@ -1,5 +1,48 @@
 local M = {}
 
+function M.detect_line_length(root_dir)
+  if not root_dir then
+    return nil
+  end
+
+  if vim.fn.filereadable(root_dir .. "/ruff.toml") == 1 then
+    return nil
+  end
+
+  local pyproject_path = root_dir .. "/pyproject.toml"
+  if vim.fn.filereadable(pyproject_path) == 0 then
+    return nil
+  end
+
+  local content = table.concat(vim.fn.readfile(pyproject_path), "\n")
+
+  if content:match("%[tool%.ruff%]") or content:match("%[tool%.ruff%.") then
+    return nil
+  end
+
+  if content:match("%[tool%.black%]") then
+    local after_section = content:match("%[tool%.black%](.+)")
+    if after_section then
+      local len = after_section:match("line%-length%s*=%s*(%d+)")
+      if len then
+        return tonumber(len)
+      end
+    end
+  end
+
+  if content:match("%[tool%.isort%]") then
+    local after_section = content:match("%[tool%.isort%](.+)")
+    if after_section then
+      local len = after_section:match("line_length%s*=%s*(%d+)")
+      if len then
+        return tonumber(len)
+      end
+    end
+  end
+
+  return nil
+end
+
 -- Detecta ferramentas de formatação e linting baseado em arquivos de configuração do projeto
 function M.detect_project_tools(root_dir)
   if not root_dir then
@@ -124,6 +167,17 @@ function M.detect_project_tools(root_dir)
   end
 
   return tools
+end
+
+function M.get_active_venv_python()
+  local venv = vim.env.VIRTUAL_ENV
+  if venv and venv ~= "" then
+    local python = venv .. "/bin/python"
+    if vim.fn.filereadable(python) == 1 then
+      return python
+    end
+  end
+  return nil
 end
 
 -- Cache de ferramentas por diretório raiz

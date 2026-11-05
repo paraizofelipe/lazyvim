@@ -63,8 +63,7 @@ return {
     config = function()
       require("git-worktree").setup({
         change_directory_command = "cd",
-        update_on_change = true,
-        update_on_change_command = "cd",
+        update_on_change = false,
         clearjumps_on_change = false,
         autopush = false,
       })
@@ -73,13 +72,51 @@ return {
 
       local Worktree = require("git-worktree")
 
+      -- Fecha/remove à força todos os buffers de arquivo listados.
+      local function close_all_buffers()
+        for _, buf in ipairs(vim.api.nvim_list_bufs()) do
+          if vim.api.nvim_buf_is_valid(buf) then
+            local name = vim.api.nvim_buf_get_name(buf)
+            local bo = vim.bo[buf]
+
+            if bo.buflisted and bo.buftype == "" and name ~= "" and not bo.modified then
+              pcall(vim.api.nvim_buf_delete, buf, { force = false })
+            end
+          end
+        end
+      end
+
       Worktree.on_tree_change(function(op, metadata)
         if op == Worktree.Operations.Switch then
           vim.schedule(function()
-            vim.notify(("Worktree: %s → %s"):format(metadata.prev_path or "?", metadata.path), vim.log.levels.INFO)
+            metadata = type(metadata) == "table" and metadata or {}
+            local path = metadata.path
+            -- O plugin emite o caminho como recebido (pode ser relativo); resolve para absoluto
+            -- para não tentar `cd` relativo a partir da worktree já ativa.
+            if type(path) == "string" and path ~= "" and Worktree.get_worktree_path then
+              path = Worktree.get_worktree_path(path)
+            end
 
-            -- opcional:
-            vim.cmd("LspRestart")
+            vim.notify(("Worktree: %s → %s"):format(metadata.prev_path or "?", path or "?"), vim.log.levels.INFO)
+
+            if type(path) == "string" and path ~= "" and vim.fn.getcwd() ~= path then
+              vim.cmd("cd " .. vim.fn.fnameescape(path))
+            end
+
+            -- Ao trocar de worktree, limpa todos os buffers abertos.
+            close_all_buffers()
+
+            -- Atualiza o indicador (WORKTREE) na statusline imediatamente.
+            require("util.worktree").refresh()
+            vim.cmd("redrawstatus")
+
+            -- Reinicia os LSP clients para reanexarem com o root_dir da nova worktree.
+            -- O Neovim 0.11+ removeu o comando :LspRestart do nvim-lspconfig (migrou para a
+            -- API nativa vim.lsp), então paramos os clients ativos diretamente; eles
+            -- reanexam sozinhos ao reabrir arquivos na nova worktree.
+            for _, client in ipairs(vim.lsp.get_clients()) do
+              pcall(vim.lsp.stop_client, client.id, true)
+            end
           end)
         end
       end)

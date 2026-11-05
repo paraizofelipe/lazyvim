@@ -11,4 +11,11 @@ return {
     { ",v", "<cmd>VenvSelect<cr>" }, -- Open picker on keymap
   },
   ft = "python", -- Load when opening Python files
+  opts = {
+    settings = {
+      options = {
+        activate_venv_in_current_session = true,
+      },
+    },
+  },
 }

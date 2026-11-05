@@ -1,5 +1,3 @@
-local python_tools = require("util.python_tools")
-
 return {
   "neovim/nvim-lspconfig",
   opts = function(_, opts)
@@ -22,7 +20,6 @@ return {
     -- Configurações específicas por servidor
     opts.servers = opts.servers or {}
 
-    -- Configuração customizada do Ruff LSP para Python (mescla com existentes)
     opts.servers.ruff = vim.tbl_deep_extend("force", opts.servers.ruff or {}, {
       cmd_env = { RUFF_TRACE = "messages" },
       capabilities = {
@@ -33,18 +30,6 @@ return {
           },
         },
       },
-      init_options = {
-        settings = {
-          logLevel = "error",
-          configurationPreference = "filesystemFirst",
-          -- Usa config global quando não há pyproject.toml no projeto
-          configuration = vim.fn.expand("~/.config/ruff.toml"),
-        },
-      },
-      -- Só ativa o Ruff se o projeto usar ele
-      autostart = function(bufnr)
-        return python_tools.should_use_lsp("ruff", bufnr)
-      end,
     })
 
     -- Configuração customizada do Lua Language Server (mescla com existente)
@@ -53,6 +38,9 @@ return {
         Lua = {
           workspace = {
             checkThirdParty = false,
+          },
+          diagnostics = {
+            globals = { "vim", "Snacks" },
           },
           codeLens = {
             enable = true,
@@ -88,11 +76,43 @@ return {
     end
 
     opts.setup.ruff = function(_, setup_opts)
-      setup_opts.on_attach = function(client, bufnr)
-        -- Desliga o formatador do ruff
-        client.server_capabilities.documentFormattingProvider = false
-        client.server_capabilities.documentRangeFormattingProvider = false
-      end
+      vim.api.nvim_create_autocmd("FileType", {
+        group = vim.api.nvim_create_augroup("ruff_per_project_start", { clear = true }),
+        pattern = "python",
+        callback = function(ev)
+          local root = vim.fs.root(ev.buf, { "pyproject.toml", "setup.cfg", "setup.py", ".git" })
+          if not root then
+            return
+          end
+
+          local pt = require("util.python_tools")
+          local line_length = pt.detect_line_length(root)
+
+          local settings = {
+            logLevel = "error",
+            configurationPreference = line_length and "editorFirst" or "filesystemFirst",
+            configuration = vim.fn.expand("~/.config/ruff.toml"),
+          }
+          if line_length then
+            settings.lineLength = line_length
+          end
+
+          vim.lsp.start({
+            name = "ruff",
+            cmd = { "ruff", "server" },
+            cmd_env = setup_opts.cmd_env,
+            root_dir = root,
+            capabilities = setup_opts.capabilities,
+            init_options = { settings = settings },
+            on_attach = function(client, _)
+              client.server_capabilities.documentFormattingProvider = false
+              client.server_capabilities.documentRangeFormattingProvider = false
+            end,
+          }, { bufnr = ev.buf })
+        end,
+      })
+
+      return true
     end
 
     return opts

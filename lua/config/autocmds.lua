@@ -18,8 +18,18 @@ vim.api.nvim_create_user_command("PythonToolsShow", function()
     return
   end
 
+  local root = vim.fs.root(0, { "pyproject.toml", "setup.cfg", ".git" }) or "unknown"
+  local line_length = python_tools.detect_line_length(root) or "default (global ruff.toml)"
+  local venv = vim.env.VIRTUAL_ENV or "NOT SET — run ,v to select venv"
+  local venv_python = python_tools.get_active_venv_python() or "none"
+
   local lines = {
-    "Python Tools Detected:",
+    "Python Tools — " .. vim.fn.fnamemodify(root, ":t"),
+    "",
+    "Project root:  " .. root,
+    "Line length:   " .. tostring(line_length),
+    "VIRTUAL_ENV:   " .. venv,
+    "Venv python:   " .. venv_python,
     "",
     "Formatters:",
   }
@@ -56,7 +66,7 @@ vim.api.nvim_create_user_command("PythonToolsShow", function()
   local buf = vim.api.nvim_create_buf(false, true)
   vim.api.nvim_buf_set_lines(buf, 0, -1, false, lines)
 
-  local width = 50
+  local width = math.max(60, #root + 16)
   local height = #lines + 2
   local win = vim.api.nvim_open_win(buf, true, {
     relative = "cursor",
@@ -79,6 +89,33 @@ vim.api.nvim_create_user_command("PythonToolsClearCache", function()
   python_tools.clear_cache()
   vim.notify("Python tools cache cleared", vim.log.levels.INFO)
 end, { desc = "Clear Python tools detection cache" })
+
+vim.api.nvim_create_autocmd("LspAttach", {
+  group = vim.api.nvim_create_augroup("ruff_project_line_length", { clear = true }),
+  callback = function(args)
+    local client = vim.lsp.get_client_by_id(args.data.client_id)
+    if not client or client.name ~= "ruff" then
+      return
+    end
+
+    local root = client.root_dir
+    if not root then
+      return
+    end
+
+    local line_length = require("util.python_tools").detect_line_length(root)
+    if not line_length then
+      return
+    end
+
+    client.notify("workspace/didChangeConfiguration", {
+      settings = {
+        lineLength = line_length,
+        configurationPreference = "editorFirst",
+      },
+    })
+  end,
+})
 
 vim.api.nvim_create_autocmd("ColorScheme", {
   pattern = "*",

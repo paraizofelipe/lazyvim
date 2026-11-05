@@ -2,22 +2,34 @@ local M = {}
 
 -- Configuration
 M.config = {
-  -- Google Gemini API Configuration
+  provider = "openrouter",
   api_url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent",
-  api_key_env = "GEMINI_API_KEY", -- Environment variable name for API key
-  timeout = 30000, -- 30 seconds timeout
+  api_key_env = "GEMINI_API_KEY",
+  timeout = 30000,
+  openrouter = {
+    api_url = "https://openrouter.ai/api/v1/chat/completions",
+    api_key_env = "OPENROUTER_API_KEY",
+    model = "openai/gpt-oss-20b:free",
+    fallback_models = {
+      "google/gemma-4-26b-a4b-it:free",
+      "liquid/lfm-2.5-1.2b-instruct:free",
+    },
+    timeout = 45000,
+  },
 }
 
 -- Prompts for different operations
 local prompts = {
   pt_to_en = [[You are a professional translator. Translate the following Portuguese text to English.
 Only output the translation, nothing else. Preserve the original formatting and line breaks.
+Preserve code identifiers, field names, branch names, file paths, and quoted strings exactly as written.
 
 Text to translate:
 %s]],
 
   en_to_pt = [[You are a professional translator. Translate the following English text to Brazilian Portuguese.
 Only output the translation, nothing else. Preserve the original formatting and line breaks.
+Preserve code identifiers, field names, branch names, file paths, and quoted strings exactly as written.
 
 Text to translate:
 %s]],
@@ -98,12 +110,68 @@ local function parse_gemini_response(json_str)
   end
 
   -- Check for error message
+  local error_msg = json_str:match('"error"%s*:%s*{[^}]*"message"%s*:%s*"([^"]*)"')
+    or json_str:match('"message"%s*:%s*"([^"]*)"')
+  if error_msg then
+    return nil, "API Error: " .. error_msg
+  end
+
+  return nil, "Failed to parse response"
+end
+
+local function parse_openrouter_response(json_str)
+  local ok, decoded = pcall(vim.json.decode, json_str)
+  if ok and type(decoded) == "table" then
+    local choice = type(decoded.choices) == "table" and decoded.choices[1] or nil
+    local message = type(choice) == "table" and choice.message or nil
+    local content = type(message) == "table" and message.content or nil
+    if type(content) == "string" then
+      return content
+    end
+
+    local err = type(decoded.error) == "table" and decoded.error.message or decoded.message
+    if type(err) == "string" then
+      return nil, "API Error: " .. err
+    end
+  end
+
+  -- Fallback para respostas não-JSON: tenta apenas extrair mensagem de erro
   local error_msg = json_str:match('"message"%s*:%s*"([^"]*)"')
   if error_msg then
     return nil, "API Error: " .. error_msg
   end
 
   return nil, "Failed to parse response"
+end
+
+local function is_openrouter_retryable_error(err)
+  if not err then
+    return false
+  end
+
+  return err:match("code[^%d]*429")
+    or err:match("code[^%d]*503")
+    or err:match("temporarily rate%-limited upstream")
+    or err:match("no healthy upstream")
+end
+
+local function build_openrouter_models(openrouter)
+  local models = {}
+  local seen = {}
+
+  local function add_model(model)
+    if model and model ~= "" and not seen[model] then
+      table.insert(models, model)
+      seen[model] = true
+    end
+  end
+
+  add_model(openrouter.model or "openai/gpt-oss-20b:free")
+  for _, fallback_model in ipairs(openrouter.fallback_models or {}) do
+    add_model(fallback_model)
+  end
+
+  return models
 end
 
 -- Function to call Gemini API
@@ -125,6 +193,7 @@ local function call_gemini(prompt, callback)
     f:write(payload)
     f:close()
   else
+    os.remove(tmp_file)
     callback(nil, "Failed to create temporary file")
     return
   end
@@ -188,6 +257,124 @@ local function call_gemini(prompt, callback)
   })
 end
 
+local function call_openrouter(prompt, callback)
+  local openrouter = M.config.openrouter or {}
+  local api_key_env = openrouter.api_key_env or "OPENROUTER_API_KEY"
+  local api_key = os.getenv(api_key_env)
+
+  if not api_key or api_key == "" then
+    callback(nil, "API key not found. Set " .. api_key_env .. " environment variable.")
+    return
+  end
+
+  local models = build_openrouter_models(openrouter)
+  for _, model in ipairs(models) do
+    if not model:match(":free$") then
+      callback(nil, "Refusing to use non-free OpenRouter model: " .. model)
+      return
+    end
+  end
+
+  local header_file = os.tmpname()
+  local hf = io.open(header_file, "w")
+  if hf then
+    hf:write("Authorization: Bearer " .. api_key)
+    hf:close()
+  else
+    os.remove(tmp_file)
+    os.remove(header_file)
+    callback(nil, "Failed to create temporary file")
+    return
+  end
+
+  local function try_model(index, last_error)
+    local model = models[index]
+    if not model then
+      os.remove(header_file)
+      callback(nil, last_error or "All free OpenRouter models failed")
+      return
+    end
+
+    local payload = string.format(
+      '{"model":"%s","messages":[{"role":"user","content":"%s"}],"max_tokens":512}',
+      json_escape(model),
+      json_escape(prompt)
+    )
+
+    local tmp_file = os.tmpname()
+    local f = io.open(tmp_file, "w")
+    if f then
+      f:write(payload)
+      f:close()
+    else
+      os.remove(tmp_file)
+      os.remove(header_file)
+      callback(nil, "Failed to create temporary file")
+      return
+    end
+
+    local api_url = openrouter.api_url or "https://openrouter.ai/api/v1/chat/completions"
+    local timeout = openrouter.timeout or M.config.timeout
+    local curl_cmd = string.format(
+      'curl -s -m %d -X POST "%s" -H "Content-Type: application/json" -H @%s -d @%s',
+      math.floor(timeout / 1000),
+      api_url,
+      header_file,
+      tmp_file
+    )
+
+    local callback_called = false
+    local stdout_data = {}
+
+    vim.fn.jobstart(curl_cmd, {
+      stdout_buffered = true,
+      on_stdout = function(_, data)
+        if data then
+          for _, line in ipairs(data) do
+            if line ~= "" then
+              table.insert(stdout_data, line)
+            end
+          end
+        end
+      end,
+      on_stderr = function(_, _) end,
+      on_exit = function(_, exit_code)
+        os.remove(tmp_file)
+
+        if callback_called then
+          return
+        end
+        callback_called = true
+
+        if exit_code ~= 0 and #stdout_data == 0 then
+          os.remove(header_file)
+          callback(nil, "Request failed with code: " .. exit_code)
+          return
+        end
+
+        if #stdout_data > 0 then
+          local response = table.concat(stdout_data, "")
+          local result, err = parse_openrouter_response(response)
+          if result then
+            os.remove(header_file)
+            callback(result, nil)
+          elseif is_openrouter_retryable_error(response) then
+            try_model(index + 1, (err or "OpenRouter model failed") .. " (model: " .. model .. ")")
+          else
+            os.remove(header_file)
+            callback(nil, err or "Failed to parse response")
+          end
+        else
+          os.remove(header_file)
+          callback(nil, "Empty response from API")
+        end
+      end,
+    })
+  end
+
+  try_model(1)
+end
+
 -- Function to show result in floating window
 local function show_result(result, title, original_buf, start_pos, end_pos)
   -- Split result into lines
@@ -195,7 +382,10 @@ local function show_result(result, title, original_buf, start_pos, end_pos)
 
   -- Add help text at the bottom
   table.insert(lines, "")
-  table.insert(lines, "─────────────────────────────────────")
+  table.insert(
+    lines,
+    "─────────────────────────────────────"
+  )
   table.insert(lines, "y: Replace original | c/q/Esc: Close")
 
   -- Create buffer
@@ -293,7 +483,6 @@ local function show_result(result, title, original_buf, start_pos, end_pos)
   })
 end
 
--- Process text with Gemini
 local function process_text(operation, title)
   -- Store the original buffer before getting selection
   local original_buf = vim.api.nvim_get_current_buf()
@@ -315,7 +504,18 @@ local function process_text(operation, title)
 
   vim.notify("Processing...", vim.log.levels.INFO)
 
-  call_gemini(prompt, function(result, error)
+  local provider = M.config.provider or "gemini"
+  local caller
+  if provider == "openrouter" then
+    caller = call_openrouter
+  elseif provider == "gemini" then
+    caller = call_gemini
+  else
+    vim.notify("Unknown provider: " .. provider, vim.log.levels.ERROR)
+    return
+  end
+
+  caller(prompt, function(result, error)
     vim.schedule(function()
       if error then
         vim.notify("Error: " .. error, vim.log.levels.ERROR)
@@ -325,6 +525,9 @@ local function process_text(operation, title)
     end)
   end)
 end
+
+M.parse_openrouter_response = parse_openrouter_response
+M.call_openrouter = call_openrouter
 
 -- Public functions for each operation
 function M.translate_pt_to_en()
