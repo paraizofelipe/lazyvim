@@ -46,13 +46,13 @@ local function do_sso_login(host, cli_opts, on_close)
       title_pos = "center",
       width = 0.6,
       height = 0.4,
+      on_close = function()
+        vim.schedule(function()
+          vim.notify("ArgoCD: Login SSO concluído, prosseguindo...", vim.log.levels.INFO)
+          on_close()
+        end)
+      end,
     },
-    on_close = function()
-      vim.schedule(function()
-        vim.notify("ArgoCD: Login SSO concluído, prosseguindo...", vim.log.levels.INFO)
-        on_close()
-      end)
-    end,
   })
 end
 

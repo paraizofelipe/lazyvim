@@ -91,6 +91,11 @@ return {
           vim.schedule(function()
             metadata = type(metadata) == "table" and metadata or {}
             local path = metadata.path
+            -- O plugin emite o caminho como recebido (pode ser relativo); resolve para absoluto
+            -- para não tentar `cd` relativo a partir da worktree já ativa.
+            if type(path) == "string" and path ~= "" and Worktree.get_worktree_path then
+              path = Worktree.get_worktree_path(path)
+            end
 
             vim.notify(("Worktree: %s → %s"):format(metadata.prev_path or "?", path or "?"), vim.log.levels.INFO)
 

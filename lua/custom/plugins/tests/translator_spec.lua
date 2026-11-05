@@ -1,4 +1,7 @@
-local M = dofile("/home/paraizo/.config/nvim/lua/custom/plugins/translator.lua")
+local SPEC_DIR = debug.getinfo(1, "S").source:sub(2):match("(.*)/") or "."
+local MODULE_PATH = SPEC_DIR .. "/../translator.lua"
+
+local M = dofile(MODULE_PATH)
 
 local pass = 0
 local fail = 0
@@ -72,14 +75,14 @@ if M.config.openrouter then
   assert_not_nil("config.openrouter.api_url existe", M.config.openrouter.api_url)
   assert_contains("config.openrouter.api_url aponta para openrouter.ai", M.config.openrouter.api_url or "", "openrouter.ai")
   assert_eq("config.openrouter.api_key_env é OPENROUTER_API_KEY", M.config.openrouter.api_key_env, "OPENROUTER_API_KEY")
-  assert_eq("config.openrouter.model é nvidia/nemotron-nano-9b-v2:free", M.config.openrouter.model, "nvidia/nemotron-nano-9b-v2:free")
+  assert_eq("config.openrouter.model é openai/gpt-oss-20b:free", M.config.openrouter.model, "openai/gpt-oss-20b:free")
   assert_eq("config.openrouter.timeout é 45000", M.config.openrouter.timeout, 45000)
 else
   for _, label in ipairs({
     "config.openrouter.api_url existe",
     "config.openrouter.api_url aponta para openrouter.ai",
     "config.openrouter.api_key_env é OPENROUTER_API_KEY",
-    "config.openrouter.model é nvidia/nemotron-nano-9b-v2:free",
+    "config.openrouter.model é openai/gpt-oss-20b:free",
     "config.openrouter.timeout é 45000",
   }) do
     fail = fail + 1
@@ -90,7 +93,7 @@ end
 
 print("\n=== translator_spec: setup com provider openrouter ===\n")
 
-local M2 = dofile("/home/paraizo/.config/nvim/lua/custom/plugins/translator.lua")
+local M2 = dofile(MODULE_PATH)
 M2.config = vim.tbl_deep_extend and
   vim.tbl_deep_extend("force", M2.config, { provider = "openrouter" }) or
   (function() M2.config.provider = "openrouter"; return M2.config end)()
@@ -127,11 +130,11 @@ assert_not_nil("call_openrouter existe como função pública ou testável", M.c
 print("\n=== translator_spec: call_openrouter fallback de modelo não usa modelo antigo ===\n")
 
 local MODELO_ANTIGO = "meta-llama/llama-3.1-8b-instruct:free"
-local MODELO_ESPERADO = "nvidia/nemotron-nano-9b-v2:free"
+local MODELO_ESPERADO = "openai/gpt-oss-20b:free"
 
 local payload_capturado = nil
 
-local M_fallback = dofile("/home/paraizo/.config/nvim/lua/custom/plugins/translator.lua")
+local M_fallback = dofile(MODULE_PATH)
 M_fallback.config.openrouter.model = nil
 
 local _orig_getenv = os.getenv
@@ -188,7 +191,7 @@ assert_eq(
   false
 )
 assert_eq(
-  "call_openrouter fallback usa modelo correto (nvidia/nemotron)",
+  "call_openrouter fallback usa modelo correto (openai/gpt-oss-20b)",
   modelo_no_payload,
   MODELO_ESPERADO
 )
@@ -200,7 +203,7 @@ local resultado_valido, erro_valido = M.parse_openrouter_response(payload_valido
 assert_eq("parse_openrouter_response extrai content de payload com message aninhado em choices", resultado_valido, "Olá mundo")
 assert_nil("parse_openrouter_response NÃO retorna erro em payload válido com message em choices", erro_valido)
 
-local payload_valido_com_role = '{"choices":[{"message":{"role":"assistant","content":"Texto traduzido"}}],"model":"nvidia/nemotron-nano-9b-v2:free"}'
+local payload_valido_com_role = '{"choices":[{"message":{"role":"assistant","content":"Texto traduzido"}}],"model":"openai/gpt-oss-20b:free"}'
 local resultado_role, erro_role = M.parse_openrouter_response(payload_valido_com_role)
 assert_eq("parse_openrouter_response extrai content ignorando campo role", resultado_role, "Texto traduzido")
 assert_nil("parse_openrouter_response NÃO trata role como erro", erro_role)
@@ -214,6 +217,33 @@ local payload_erro_sem_choices = '{"message":"Unauthorized","status":401}'
 local resultado_sem_choices, msg_sem_choices = M.parse_openrouter_response(payload_erro_sem_choices)
 assert_nil("parse_openrouter_response retorna nil para payload de erro sem choices", resultado_sem_choices)
 assert_contains("parse_openrouter_response captura message de erro sem choices", msg_sem_choices or "", "Unauthorized")
+
+print("\n=== translator_spec: parse_openrouter_response decodifica escapes JSON corretamente ===\n")
+
+local payload_com_aspas = '{"choices":[{"message":{"content":"Ele disse \\"olá\\" e saiu"}}]}'
+assert_eq(
+  "parse_openrouter_response não trunca conteúdo com aspas escapadas",
+  M.parse_openrouter_response(payload_com_aspas),
+  'Ele disse "olá" e saiu'
+)
+
+local payload_barra_n = '{"choices":[{"message":{"content":"C:\\\\new\\nlinha"}}]}'
+assert_eq(
+  "parse_openrouter_response distingue \\\\n literal de quebra de linha",
+  M.parse_openrouter_response(payload_barra_n),
+  "C:\\new\nlinha"
+)
+
+local payload_unicode = '{"choices":[{"message":{"content":"a\\u00e7\\u00e3o"}}]}'
+assert_eq("parse_openrouter_response decodifica escapes \\uXXXX", M.parse_openrouter_response(payload_unicode), "ação")
+
+local resultado_invalido, erro_invalido = M.parse_openrouter_response("not json")
+assert_nil("parse_openrouter_response retorna nil para payload não-JSON", resultado_invalido)
+assert_contains("parse_openrouter_response sinaliza falha de parse", erro_invalido or "", "Failed to parse response")
+
+local resultado_null, erro_null = M.parse_openrouter_response('{"choices":[{"message":{"content":null}}]}')
+assert_nil("parse_openrouter_response retorna nil quando content é null", resultado_null)
+assert_contains("parse_openrouter_response sinaliza falha quando content é null", erro_null or "", "Failed to parse response")
 
 print("\n=== RESULTADO FINAL ===\n")
 print(string.format("  Passou: %d", pass))

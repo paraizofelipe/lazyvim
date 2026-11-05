@@ -80,7 +80,7 @@ return {
         group = vim.api.nvim_create_augroup("ruff_per_project_start", { clear = true }),
         pattern = "python",
         callback = function(ev)
-          local root = vim.fs.root(ev.buf, { "pyproject.toml", "setup.cfg", ".git" })
+          local root = vim.fs.root(ev.buf, { "pyproject.toml", "setup.cfg", "setup.py", ".git" })
           if not root then
             return
           end

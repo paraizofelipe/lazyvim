@@ -120,20 +120,22 @@ local function parse_gemini_response(json_str)
 end
 
 local function parse_openrouter_response(json_str)
-  local content = json_str:match('"choices"%s*:%s*%[.-"message"%s*:%s*{.-"content"%s*:%s*"(.-)"')
-  if not content then
-    content = json_str:match('"message"%s*:%s*{.-"content"%s*:%s*"(.-)"')
-  end
-  if content then
-    content = content:gsub("\\n", "\n")
-    content = content:gsub('\\"', '"')
-    content = content:gsub("\\\\", "\\")
-    content = content:gsub("\\/", "/")
-    content = content:gsub("\\t", "\t")
-    content = content:gsub("\\r", "\r")
-    return content
+  local ok, decoded = pcall(vim.json.decode, json_str)
+  if ok and type(decoded) == "table" then
+    local choice = type(decoded.choices) == "table" and decoded.choices[1] or nil
+    local message = type(choice) == "table" and choice.message or nil
+    local content = type(message) == "table" and message.content or nil
+    if type(content) == "string" then
+      return content
+    end
+
+    local err = type(decoded.error) == "table" and decoded.error.message or decoded.message
+    if type(err) == "string" then
+      return nil, "API Error: " .. err
+    end
   end
 
+  -- Fallback para respostas não-JSON: tenta apenas extrair mensagem de erro
   local error_msg = json_str:match('"message"%s*:%s*"([^"]*)"')
   if error_msg then
     return nil, "API Error: " .. error_msg

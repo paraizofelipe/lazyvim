@@ -48,6 +48,12 @@ package.loaded["git-worktree"] = {
   on_tree_change = function(callback)
     captured_tree_change_callback = callback
   end,
+  get_worktree_path = function(path)
+    if path:sub(1, 1) == "/" then
+      return path
+    end
+    return "/repo-root/" .. path
+  end,
 }
 
 package.loaded.telescope = {
@@ -191,6 +197,12 @@ assert_eq("path vazio não executa cd", command_exists("cd "), false)
 invoke_tree_change({ prev_path = "/repo-old", path = "/repo valid/worktree" })
 assert_eq("path válido chama fnameescape com o caminho da worktree", fnameescape_calls[1], "/repo valid/worktree")
 assert_eq("path válido executa cd com fnameescape", commands[1], "cd escaped:/repo valid/worktree")
+
+invoke_tree_change({ prev_path = "/repo-old", path = "feat-x" })
+assert_eq("path relativo é resolvido para absoluto antes do cd", commands[1], "cd escaped:/repo-root/feat-x")
+
+invoke_tree_change({ prev_path = "/repo-old", path = "/repo-linked" })
+assert_eq("path igual ao cwd não executa cd redundante", command_exists("cd "), false)
 
 buffers = { 10 }
 buffer_options[10] = { buflisted = true, buftype = "", name = "/repo-linked/modified.lua", modified = true }
